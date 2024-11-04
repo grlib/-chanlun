@@ -10,6 +10,9 @@ import pandas as pd
 import numpy as np
 from  datetime import date
 import os
+
+import os
+sys.setrecursionlimit(30000)
  
 
   
@@ -909,34 +912,40 @@ def sell_point3_ris(pro_pivot,tails,num_pivot=2):
         else:
             return False,0  
  
+def plot(df, save_file='chart.html'):
+    from pyecharts import options as opts
+    from pyecharts.charts import Kline, Grid
+    
+    kline = Kline(init_opts=opts.InitOpts(width="1600px", height="800px"))
+    # 创建K线图
+    kline.add_xaxis(df.index.tolist())
+    kline.add_yaxis("K线图", df[['open', 'close', 'low', 'high']].values.tolist())
+    kline.set_global_opts(
+        xaxis_opts=opts.AxisOpts(is_scale=True),
+        yaxis_opts=opts.AxisOpts(
+            is_scale=True,
+            splitarea_opts=opts.SplitAreaOpts(
+                is_show=True, areastyle_opts=opts.AreaStyleOpts(opacity=1)
+            ),
+        ),
+        datazoom_opts=[opts.DataZoomOpts(type_="slider"), opts.DataZoomOpts(type_="inside")],
+    )
+    
+    kline.render(save_file)
 def main():
-    df=pd.read_csv('C:/Users/Administrator/Desktop/ecom/chanlun/sh.csv',index_col=0)[['low','high']]
+    df=pd.read_csv('sh.csv',index_col=0)[['low','high', 'open', 'close']]
     df['datetime']=df.index
-    #REMOVE INCLUSION
-    while ( True ):
-        temp_len = len(df)
-        i=0
-        while i<=len(df)-4:
-            if (df.iloc[i+2,0]>=df.iloc[i+1,0] and df.iloc[i+2,1]<=df.iloc[i+1,1]) or\
-            (df.iloc[i+2,0]<=df.iloc[i+1,0] and df.iloc[i+2,1]>=df.iloc[i+1,1]):
-                if df.iloc[i+1,0]>df.iloc[i,0]:
-                    df.iloc[i+2,0] = max(df.iloc[i+1:i+3,0])
-                    df.iloc[i+2,1] = max(df.iloc[i+1:i+3,1])
-                    df.drop(df.index[i+1],inplace=True)
-                    
-                    continue
-                else:
-                    df.iloc[i+2,0] = min(df.iloc[i+1:i+3,0])
-                    df.iloc[i+2,1] = min(df.iloc[i+1:i+3,1])
-                    df.drop(df.index[i+1],inplace=True)
-                    
-                    continue
-            i = i + 1
-       # print(len(df))    
-        if len(df)==temp_len:
-            break
-            
+    o_df = df.copy()
+    
+    # #REMOVE INCLUSION
+    from util import remove_inclusion
+    df = remove_inclusion(o_df)
     df= df.reset_index(drop=True)  
+    
+    
+    # plot(df)
+    # plot(o_df, 'ochart.html')
+    
     #get difenxing and dingfenxing
     ul=[0]
     for i in range(len(df)-2):
@@ -949,6 +958,8 @@ def main():
         else:
             ul = ul + [0]
     ul = ul + [0]
+    print(ul)
+    exit()
     global df1
     df1 = pd.concat((df[['low','high']],pd.DataFrame(ul),df['datetime']),axis=1)
       
