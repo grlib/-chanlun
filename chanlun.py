@@ -7,6 +7,8 @@ Created on Mon Oct 12 13:32:43 2020
 
 import sys
 import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 import numpy as np
 from  datetime import date
 import os
@@ -29,7 +31,6 @@ def buy_sell(INDEX,data_dir,debug=1):
     if date.fromtimestamp(os.path.getmtime(len_dir[INDEX]))<date.today():#if the file is
          #not updated on today
          return None
-# =============================================================================
     if debug == 0:
         debug = 1
     df = pd.read_csv(len_dir[INDEX])[['low','high','datetime']][:-debug]
@@ -178,13 +179,11 @@ def buy_sell(INDEX,data_dir,debug=1):
     #tails is the unfinished seg,tails[4] is its direction
     a,tails = get_pivot(lines)    
     pro_a= process_pivot(a)
-# =============================================================================
 #     if len(pro_a)>=4:
 #         if pro_a[-1].trend==-1 and pro_a[-2].trend==0 and pro_a[-3].trend==-1 and\
 #         tails[4]==-1 and pro_a[-1].finished ==0 and df1.iloc[-1][0] <pro_a[-1].dd :
 #             for yi in range(0,len(a)):
 #                 pro_a[yi].dis1()
-# =============================================================================
     
     
     signal,interval = buy_point1(pro_a,tails)    
@@ -676,6 +675,9 @@ def seg_force(seg):
     
     
 def get_pivot(lines):
+    """
+        获取中枢
+    """
     Pivot1_array = []
     i = 0
     
@@ -932,11 +934,34 @@ def plot(df, save_file='chart.html'):
     )
     
     kline.render(save_file)
+    
+def plot_df(df):
+    # 绘制K线图
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.plot(df['datetime'], df['low'], label='Low', color='blue')
+    ax.plot(df['datetime'], df['high'], label='High', color='red')
+
+    # 绘制顶分型和底分型
+    for i, row in df.iterrows():
+        if row['od'] == 1:  # 顶分型
+            ax.scatter(row['datetime'], row['high'], color='red', label='Top Formation' if i == 1 else "")
+        elif row['od'] == -1:  # 底分型
+            ax.scatter(row['datetime'], row['low'], color='green', label='Bottom Formation' if i == 2 else "")
+
+    # 设置图表格式
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+    ax.xaxis.set_major_locator(mdates.DayLocator())
+    plt.xticks(rotation=45)
+    plt.title('K-Line Chart with Formations')
+    plt.xlabel('Date')
+    plt.ylabel('Price')
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
 def main():
     df=pd.read_csv('sh.csv',index_col=0)[['low','high', 'open', 'close']]
     df['datetime']=df.index
     o_df = df.copy()
-    
     # #REMOVE INCLUSION
     from util import remove_inclusion
     df = remove_inclusion(o_df)
@@ -947,6 +972,7 @@ def main():
     # plot(o_df, 'ochart.html')
     
     #get difenxing and dingfenxing
+    # 其中0表示没有分型，1表示顶分型（上升趋势的结束），-1表示底分型（下降趋势的结束）
     ul=[0]
     for i in range(len(df)-2):
         if df.iloc[i+2,0] < df.iloc[i+1,0] and df.iloc[i,0] < df.iloc[i+1,0]:
@@ -958,11 +984,9 @@ def main():
         else:
             ul = ul + [0]
     ul = ul + [0]
-    print(ul)
-    exit()
     global df1
     df1 = pd.concat((df[['low','high']],pd.DataFrame(ul),df['datetime']),axis=1)
-      
+    
     i = 0
     
     while df1.iloc[i,2] == 0 and i < len(df1)-2:
@@ -974,12 +998,14 @@ def main():
         i = i + 1
     df1=df1[i:]
     df1.rename(columns= {0:'od'},inplace=True)
+    
     #df1.columns=Index(['low', 'high', 'od', 'datetime'], dtype='object')
     if len(df1)<=60:
         print('error!')
         return ;
     #remove those within 3 bars
     df1=df1.reset_index(drop=True)
+    
     global od_list#od_list are the index of df1 whose corresponding point are fenxing extreme vertex
     
     od_list=[0]
@@ -992,7 +1018,7 @@ def main():
     #od_list are the index of df1 whose corresponding point are fenxing extreme vertex
     
     
-    #generate seg
+    #generate seg 生成线段
     start = 0
     while start < len(od_list)-5:
         if check_init_seg(od_list[start:start+4]):
@@ -1028,6 +1054,10 @@ def main():
     
     low_extre=low_list.min()
     high_extre=high_list.max()
+    
+    print(high_list)
+    print(high_list.idxmax())
+    
     if se.finished == True:
         if lines[-1][0][1] < lines[-1][1][1] :#d==1
             lines += [ [(se.vertex[-1],lines[-1][1][1]),(low_list.idxmin(),low_extre)]]
@@ -1059,7 +1089,40 @@ def main():
         pro_a[i].display()
     print('these index are for df1,not df!,ex:pro_a[0].leave_end_time to obtain the leave end time')
     
-     
+    signal,interval = buy_point1(pro_a,tails)    
+    
+    print(f'buy_point1 : {signal}')
+    if signal:#trend slow down, first pivot dd > next pivot gg
+        pro_a[-1].write_out('../buy1/'+'_buy1.txt',tails)
+        
+    signal,interval = buy_point3_des(pro_a,tails)    
+    print(f'buy_point3_des : {signal}')
+    
+    if signal:#trend slow down, first pivot dd > next pivot gg
+        pro_a[-1].write_out('../buy3/'+'_buy3.txt',tails)
+    signal,interval = buy_point23(pro_a,tails)    
+    print(f'buy_point23 : {signal}')
+    if signal:#trend slow down, first pivot dd > next pivot gg
+         pro_a[-1].write_out('../buy23/'+'_buy23.txt',tails)
+        
+    signal,interval = buy_point2(pro_a,tails)    
+    print(f'buy_point2 : {signal}')
+    if signal:#trend slow down, first pivot dd > next pivot gg
+         pro_a[-1].write_out('../buy2/'+'_buy2.txt',tails)
+         
+    signal,interval = sell_point1(pro_a,tails)    
+    print(f'sell_point1 : {signal}')
+    if signal:#trend slow down, first pivot dd > next pivot gg
+        pro_a[-1].write_out('../sell1/'+'_sell1.txt',tails)
+        
+    signal,interval = sell_point3_ris(pro_a,tails)    
+    print(f'sell_point3_ris : {signal}')
+    if signal:#trend slow down, first pivot dd > next pivot gg
+        pro_a[-1].write_out('../sell3/'+'_sell3.txt',tails)
+    signal,interval = sell_point2(pro_a,tails)    
+    print(f'sell_point2 : {signal}')
+    if signal:#trend slow down, first pivot dd > next pivot gg
+         pro_a[-1].write_out('../sell2/'+'_sell2.txt',tails)
     
 if __name__=="__main__": 
     main()
